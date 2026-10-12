@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Miralume Homes</title>
+  <link rel="icon" href="/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top"></header>
+  <main class="wrap" id="page"><p class="crumbs">Loading…</p></main>
+  <footer></footer>
+
+  <script src="/config.js"></script>
+  <script src="/site.js"></script>
+  <script>
+    (function () {
+      const { CFG, STATUS_TEXT, CLOSED, esc, api, money, where, beds, setupNotice, chrome } = window.Site;
+      chrome('');
+      const reference = new URLSearchParams(location.search).get('ref') || decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || '');
+      const page = document.getElementById('page');
+      let current = null;
+      let photo = 0;
+      let mode = 'enquiry';
+      let chosenSlot = null;
+      let slotsLoaded = null;
+      let sent = null;
+
+      function facts(p) {
+        return [
+          beds(p),
+          p.bathrooms ? `${p.bathrooms} bathroom${p.bathrooms === 1 ? '' : 's'}` : '',
+          p.areaSqm ? `${p.areaSqm} m²` : '',
+          p.plotSqm ? `${p.plotSqm} m² plot` : '',
+          p.parkingSpaces ? `${p.parkingSpaces} parking` : '',
+          p.yearBuilt ? `Built ${p.yearBuilt}` : '',
+          p.furnished ? ({ furnished: 'Furnished', part: 'Part furnished', unfurnished: 'Unfurnished' }[p.furnished] || '') : '',
+        ].filter(Boolean).map((f) => `<span>${esc(f)}</span>`).join('') + (p.energyRating ? `<span>Energy <span class="epc">${esc(p.energyRating)}</span></span>` : '');
+      }
+
+      function slotsHtml() {
+        if (!slotsLoaded) return '<p class="where">Finding free times…</p>';
+        if (!slotsLoaded.days?.length) return '<p class="where">No free times in the next few weeks. Send an enquiry and we will find one.</p>';
+        const tz = slotsLoaded.timezone;
+        return `<div class="slots">${slotsLoaded.days.slice(0, 7).map((d) => `<div><h4>${esc(new Date(`${d.date}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }))}</h4>
+          <div class="row">${d.slots.slice(0, 8).map((s) => `<button type="button" data-slot="${esc(s)}" aria-pressed="${s === chosenSlot}">${esc(new Date(s).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz }))}</button>`).join('')}</div></div>`).join('')}</div>`;
+      }
+
+      function panel(p) {
+        const agent = p.agent?.name ? `<div class="agent"><div class="av">${esc(p.agent.name.split(' ').map((w) => w[0]).join('').slice(0, 2))}</div>
+          <div><strong>${esc(p.agent.name)}</strong><small>${esc(p.agent.phone || '')}</small></div></div>` : '';
+        if (sent) return `${agent}<div class="ok">${esc(sent)}</div>`;
+        if (CLOSED.has(p.status)) return `${agent}<p>This home has ${p.status === 'let' ? 'been let' : 'been sold'}. Tell us what you are looking for and we will let you know when something similar comes up.</p>
+          <a class="primary" style="display:grid;place-items:center;text-decoration:none" href="/">See homes on the market</a>`;
+        const canBook = Boolean(p.viewingUrl);
+        return `${agent}
+          ${canBook ? `<div class="tabs" role="group"><button type="button" data-mode="enquiry" aria-pressed="${mode === 'enquiry'}">Ask a question</button>
+            <button type="button" data-mode="viewing" aria-pressed="${mode === 'viewing'}">Book a viewing</button></div>` : ''}
+          ${mode === 'viewing' ? slotsHtml() : ''}
+          <form id="enquiry" novalidate>
+            <label>Your name<input name="name" autocomplete="name" required></label>
+            <label>Email<input name="email" type="email" autocomplete="email" required></label>
+            <label>Phone (optional)<input name="phone" type="tel" autocomplete="tel"></label>
+            <label>${mode === 'viewing' ? 'Anything we should know?' : 'Your message'}<textarea name="message">${mode === 'viewing' ? '' : `I am interested in ${esc(p.title)} (${esc(p.reference)}).`}</textarea></label>
+            <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+            <div id="form-error"></div>
+            <button class="primary" type="submit" ${mode === 'viewing' && !chosenSlot ? 'disabled' : ''}>${mode === 'viewing' ? (chosenSlot ? 'Book this viewing' : 'Pick a time above') : 'Send enquiry'}</button>
+          </form>`;
+      }
+
+      function render() {
+        const p = current;
+        document.title = `${p.title} · Miralume Homes`;
+        const photos = p.photos || [];
+        const main = photos[photo] || photos[0];
+        page.innerHTML = `
+          <p class="crumbs"><a href="/">Homes</a> › ${esc(p.address?.city || '')} › ${esc(p.reference)}</p>
+          <div class="gallery${photos.length < 3 ? ' single' : ''}">
+            <div class="main">${main ? `<img src="${esc(main.url)}" alt="${esc(main.caption || p.title)}">` : ''}
+              ${STATUS_TEXT[p.status] ? `<span class="ribbon ${esc(p.status)}">${esc(STATUS_TEXT[p.status])}</span>` : ''}</div>
+            <div class="side">${photos.filter((_, i) => i !== photo).slice(0, 2).map((ph) => `<img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}">`).join('')}</div>
+          </div>
+          ${photos.length > 1 ? `<div class="thumbs">${photos.map((ph, i) => `<button type="button" data-photo="${i}" aria-current="${i === photo}" aria-label="${esc(ph.caption || `Photo ${i + 1}`)}"><img src="${esc(ph.url)}" alt=""></button>`).join('')}</div>` : ''}
+          <div class="layout">
+            <article>
+              <p class="where">${p.listingType === 'rent' ? 'To rent' : 'For sale'} · ${esc(where(p))}</p>
+              <h1>${esc(p.title)}</h1>
+              <div class="price">${money(p)}</div>
+              <div class="keyfacts">${facts(p)}</div>
+              <div class="desc">${esc(p.description || '')}</div>
+              ${p.features?.length ? `<ul class="features">${p.features.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
+              <p class="legal">${esc([p.reference, p.agency?.name, p.agency?.licence].filter(Boolean).join(' · '))}</p>
+            </article>
+            <aside class="panel" id="panel">${panel(p)}</aside>
+          </div>`;
+        wire();
+      }
+
+      function wire() {
+        page.querySelectorAll('[data-photo]').forEach((b) => b.addEventListener('click', () => { photo = Number(b.dataset.photo); render(); }));
+        page.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', async () => {
+          mode = b.dataset.mode; chosenSlot = null; render();
+          if (mode === 'viewing' && !slotsLoaded) {
+            try { slotsLoaded = await api(`/${encodeURIComponent(current.reference)}/viewing-slots`); } catch { slotsLoaded = { days: [] }; }
+            render();
+          }
+        }));
+        page.querySelectorAll('[data-slot]').forEach((b) => b.addEventListener('click', () => { chosenSlot = b.dataset.slot; render(); }));
+        const form = document.getElementById('enquiry');
+        if (!form) return;
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const f = new FormData(form);
+          const body = { name: f.get('name'), email: f.get('email'), phone: f.get('phone'), message: f.get('message'), website: f.get('website'), type: mode, language: 'en' };
+          if (mode === 'viewing') body.startsAt = chosenSlot;
+          const button = form.querySelector('button[type=submit]');
+          button.disabled = true; button.textContent = 'Sending…';
+          try {
+            const r = await api(`/${encodeURIComponent(current.reference)}/enquiries`, { method: 'POST', body: JSON.stringify(body) });
+            sent = mode === 'viewing' && r.viewing
+              ? `Booked: ${new Date(r.viewing.startsAt).toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: r.viewing.timezone || undefined })}. A confirmation is on its way to ${body.email}.`
+              : `Thank you, ${body.name}. ${current.agent?.name ? current.agent.name.split(' ')[0] : 'We'} will get back to you shortly.`;
+            render();
+          } catch (error) {
+            document.getElementById('form-error').innerHTML = `<p class="err">${esc(error.message)}</p>`;
+            button.disabled = false; button.textContent = 'Try again';
+          }
+        });
+      }
+
+      async function load(first) {
+        try {
+          const data = await api(`/${encodeURIComponent(reference)}`);
+          const changed = !current || JSON.stringify([current.status, current.price, current.title, current.photos?.length]) !== JSON.stringify([data.property.status, data.property.price, data.property.title, data.property.photos?.length]);
+          current = data.property;
+          // Re-render on a change, but never while someone is typing in the form.
+          const typing = document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+          if (first || (changed && !typing)) render();
+        } catch (error) {
+          if (first || !current) page.innerHTML = /Not found/i.test(error.message)
+            ? '<div class="section"><div class="empty">This home is no longer on our website. <a href="/">See what is on the market</a>.</div></div>'
+            : `<div class="section">${setupNotice(error)}</div>`;
+        }
+      }
+
+      load(true);
+      setInterval(() => { if (!document.hidden) load(false); }, Math.max(5, CFG.refreshSeconds) * 1000);
+    })();
+  </script>
+</body>
+</html>

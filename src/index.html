@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Miralume Homes · Homes in Lisbon, Cascais and Sintra</title>
+  <meta name="description" content="Homes to buy and rent in Lisbon, Cascais and Sintra.">
+  <link rel="icon" href="/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top"></header>
+
+  <section class="hero">
+    <div class="bg" id="hero-bg"></div>
+    <div class="wrap">
+      <h1>Find your place in Lisbon and along the coast</h1>
+      <p>Apartments, townhouses and villas in Lisbon, Cascais, Sintra and Ericeira, with people who know every street.</p>
+      <form class="search" id="search" role="search">
+        <div class="seg" role="group" aria-label="Buy or rent">
+          <button type="button" data-type="" aria-pressed="true">All</button>
+          <button type="button" data-type="sale" aria-pressed="false">Buy</button>
+          <button type="button" data-type="rent" aria-pressed="false">Rent</button>
+        </div>
+        <select name="city" aria-label="Area"><option value="">Any area</option></select>
+        <select name="bedrooms" aria-label="Bedrooms">
+          <option value="">Any bedrooms</option><option value="1">1+ bedrooms</option><option value="2">2+ bedrooms</option>
+          <option value="3">3+ bedrooms</option><option value="4">4+ bedrooms</option>
+        </select>
+        <select name="maxPrice" aria-label="Maximum price">
+          <option value="">Any price</option><option value="2000">Up to €2,000 / month</option><option value="500000">Up to €500,000</option>
+          <option value="1000000">Up to €1,000,000</option><option value="2500000">Up to €2,500,000</option>
+        </select>
+        <button class="go" type="submit">Search</button>
+      </form>
+      <div class="live" aria-live="polite"><span class="dot"></span><span id="live-text">Connecting to our listings…</span></div>
+    </div>
+  </section>
+
+  <main class="wrap section" id="listings">
+    <div class="section-head">
+      <h2 id="heading">Homes on the market</h2>
+      <span class="count" id="count"></span>
+    </div>
+    <div id="results"></div>
+  </main>
+
+  <footer></footer>
+
+  <script src="/config.js"></script>
+  <script src="/site.js"></script>
+  <script>
+    (function () {
+      const { CFG, STATUS_TEXT, CLOSED, esc, api, money, where, beds, listingUrl, setupNotice, chrome } = window.Site;
+      const params = new URLSearchParams(location.search);
+      const state = { type: params.get('type') || '', city: '', bedrooms: '', maxPrice: '' };
+      const form = document.getElementById('search');
+      const results = document.getElementById('results');
+      let previous = null; // reference -> "status|price" from the last load
+      const flags = new Map(); // reference -> { text, until }
+
+      chrome(state.type);
+      form.querySelectorAll('.seg button').forEach((b) => {
+        b.setAttribute('aria-pressed', String(b.dataset.type === state.type));
+        b.addEventListener('click', () => {
+          state.type = b.dataset.type;
+          form.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+          load(true);
+        });
+      });
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const f = new FormData(form);
+        state.city = f.get('city') || ''; state.bedrooms = f.get('bedrooms') || ''; state.maxPrice = f.get('maxPrice') || '';
+        load(true);
+      });
+
+      function card(p) {
+        const ribbon = STATUS_TEXT[p.status]
+          ? `<span class="ribbon ${esc(p.status)}">${esc(STATUS_TEXT[p.status])}</span>`
+          : (p.publishedAt && Date.now() - new Date(p.publishedAt).getTime() < 7 * 864e5 ? '<span class="ribbon new">New</span>' : '');
+        const flag = flags.get(p.reference);
+        const showFlag = flag && flag.until > Date.now();
+        const photo = p.photos?.[0];
+        return `<a class="card${CLOSED.has(p.status) ? ' closed' : ''}${showFlag && flag.fresh ? ' changed' : ''}" href="${listingUrl(p)}">
+          <div class="ph">${photo ? `<img src="${esc(photo.url)}" alt="${esc(photo.caption || p.title)}" loading="lazy">` : ''}${ribbon}
+            ${showFlag ? `<span class="flag">${esc(flag.text)}</span>` : ''}</div>
+          <div class="body">
+            <div class="price">${money(p)}</div>
+            <h3>${esc(p.title)}</h3>
+            <div class="where">${esc(where(p))}</div>
+            <div class="facts">${[beds(p), p.bathrooms ? `${p.bathrooms} bath` : '', p.areaSqm ? `${p.areaSqm} m²` : ''].filter(Boolean).map(esc).join('<span aria-hidden="true">·</span>')}</div>
+          </div>
+        </a>`;
+      }
+
+      function noteChanges(list) {
+        const now = new Map(list.map((p) => [p.reference, `${p.status}|${p.price}`]));
+        if (previous) {
+          for (const p of list) {
+            const before = previous.get(p.reference);
+            if (!before) { flags.set(p.reference, { text: 'Just listed', until: Date.now() + 60e3, fresh: true }); continue; }
+            const [status, price] = before.split('|');
+            if (status !== p.status) flags.set(p.reference, { text: STATUS_TEXT[p.status] ? `Now ${STATUS_TEXT[p.status].toLowerCase()}` : 'Back on the market', until: Date.now() + 60e3, fresh: true });
+            else if (price !== String(p.price)) flags.set(p.reference, { text: Number(p.price) < Number(price) ? 'Price reduced' : 'Price updated', until: Date.now() + 60e3, fresh: true });
+            else if (flags.get(p.reference)) flags.get(p.reference).fresh = false;
+          }
+        }
+        previous = now;
+      }
+
+      async function load(userAction) {
+        const q = new URLSearchParams({ limit: '50' });
+        if (state.type) q.set('type', state.type);
+        if (state.city) q.set('city', state.city);
+        if (state.bedrooms) q.set('bedrooms', state.bedrooms);
+        if (state.maxPrice) q.set('maxPrice', state.maxPrice);
+        try {
+          const data = await api(`?${q}`);
+          const list = data.properties.filter(Boolean);
+          if (userAction) previous = null;
+          noteChanges(list);
+          document.getElementById('heading').textContent = state.type === 'rent' ? 'Homes to rent' : state.type === 'sale' ? 'Homes for sale' : 'Homes on the market';
+          document.getElementById('count').textContent = `${data.total} ${data.total === 1 ? 'home' : 'homes'}`;
+          results.innerHTML = list.length ? `<div class="grid">${list.map(card).join('')}</div>` : '<div class="empty">Nothing matches that search right now. Try a wider one.</div>';
+          const select = form.elements.city;
+          if (select.options.length === 1) {
+            [...new Set(list.map((p) => p.address?.city).filter(Boolean))].sort().forEach((c) => select.add(new Option(c, c)));
+          }
+          const hero = list.find((p) => p.photos?.length && !CLOSED.has(p.status));
+          if (hero && !document.getElementById('hero-bg').style.backgroundImage) {
+            document.getElementById('hero-bg').style.backgroundImage = `url("${hero.photos[0].url}")`;
+          }
+          document.getElementById('live-text').textContent = `Live from our listings · updated ${new Date().toLocaleTimeString('en-GB')}`;
+        } catch (error) {
+          results.innerHTML = setupNotice(error);
+          document.getElementById('live-text').textContent = 'Not connected';
+        }
+      }
+
+      load(true);
+      setInterval(() => { if (!document.hidden) load(false); }, Math.max(5, CFG.refreshSeconds) * 1000);
+    })();
+  </script>
+</body>
+</html>
