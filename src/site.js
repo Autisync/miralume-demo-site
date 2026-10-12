@@ -37,6 +37,53 @@ function beds(p) {
   return p.bedrooms ? `${p.bedrooms} bed${p.bedrooms === 1 ? '' : 's'}` : '';
 }
 
+/**
+ * A tour or video link as something the page can show in a frame: YouTube,
+ * Vimeo, Matterport, Kuula and similar. null means open it in a new tab.
+ */
+function embedUrl(raw) {
+  let u;
+  try { u = new URL(raw); } catch { return null; }
+  if (u.protocol !== 'https:') return null;
+  const host = u.hostname.replace(/^www\./, '');
+  if (host === 'youtu.be') return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(u.pathname.slice(1))}`;
+  if (host.endsWith('youtube.com')) {
+    const id = u.searchParams.get('v') || (u.pathname.match(/^\/(?:shorts|embed|live)\/([\w-]+)/) || [])[1];
+    return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null;
+  }
+  if (host === 'vimeo.com') {
+    const id = (u.pathname.match(/^\/(\d+)/) || [])[1];
+    return id ? `https://player.vimeo.com/video/${id}` : null;
+  }
+  if (host === 'player.vimeo.com') return u.href;
+  if (host === 'my.matterport.com' && u.searchParams.get('m')) { u.searchParams.set('play', '1'); return u.href; }
+  if (['kuula.co', 'cloudpano.com', 'app.cloudpano.com', 'tour.giraffe360.com', 'momento360.com', 'roundme.com', 'teliportme.com'].includes(host)) return u.href;
+  return null;
+}
+
+/** Full-screen frame for a tour or a video, over the page. */
+function openMedia(url, title) {
+  const embed = embedUrl(url);
+  if (!embed) { window.open(url, '_blank', 'noopener'); return; }
+  const box = document.createElement('div');
+  box.className = 'lightbox';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', title);
+  box.innerHTML = `<div class="lightbox-bar"><strong>${esc(title)}</strong>
+      <a href="${esc(url)}" target="_blank" rel="noopener">Open in a new tab</a>
+      <button type="button" aria-label="Close">×</button></div>
+    <iframe src="${esc(embed)}" title="${esc(title)}" allow="fullscreen; xr-spatial-tracking; accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+  const close = () => { box.remove(); document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  box.querySelector('button').addEventListener('click', close);
+  box.addEventListener('click', (e) => { if (e.target === box) close(); });
+  document.addEventListener('keydown', onKey);
+  document.body.style.overflow = 'hidden';
+  document.body.appendChild(box);
+  box.querySelector('button').focus();
+}
+
 function listingUrl(p) {
   return `/properties/${encodeURIComponent(p.reference)}`;
 }
@@ -78,4 +125,4 @@ function chrome(active) {
   }
 }
 
-window.Site = { CFG, STATUS_TEXT, CLOSED, esc, api, money, where, beds, listingUrl, setupNotice, chrome };
+window.Site = { CFG, STATUS_TEXT, CLOSED, esc, api, money, where, beds, listingUrl, setupNotice, chrome, embedUrl, openMedia };

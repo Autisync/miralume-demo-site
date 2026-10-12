@@ -87,7 +87,8 @@
         const photo = p.photos?.[0];
         return `<a class="card${CLOSED.has(p.status) ? ' closed' : ''}${showFlag && flag.fresh ? ' changed' : ''}" href="${listingUrl(p)}">
           <div class="ph">${photo ? `<img src="${esc(photo.url)}" alt="${esc(photo.caption || p.title)}" loading="lazy">` : ''}${ribbon}
-            ${showFlag ? `<span class="flag">${esc(flag.text)}</span>` : ''}</div>
+            ${showFlag ? `<span class="flag">${esc(flag.text)}</span>` : ''}
+            ${p.virtualTourUrl || p.videoUrl ? `<span class="has-tour">${p.virtualTourUrl ? '360° tour' : '▶ Video'}</span>` : ''}</div>
           <div class="body">
             <div class="price">${money(p)}</div>
             <h3>${esc(p.title)}</h3>

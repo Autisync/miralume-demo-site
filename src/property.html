@@ -19,7 +19,7 @@
   <script src="/site.js"></script>
   <script>
     (function () {
-      const { CFG, STATUS_TEXT, CLOSED, esc, api, money, where, beds, setupNotice, chrome } = window.Site;
+      const { CFG, STATUS_TEXT, CLOSED, esc, api, money, where, beds, setupNotice, chrome, openMedia } = window.Site;
       chrome('');
       const reference = new URLSearchParams(location.search).get('ref') || decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || '');
       const page = document.getElementById('page');
@@ -84,6 +84,10 @@
               ${STATUS_TEXT[p.status] ? `<span class="ribbon ${esc(p.status)}">${esc(STATUS_TEXT[p.status])}</span>` : ''}</div>
             <div class="side">${photos.filter((_, i) => i !== photo).slice(0, 2).map((ph) => `<img src="${esc(ph.url)}" alt="${esc(ph.caption || '')}">`).join('')}</div>
           </div>
+          ${p.virtualTourUrl || p.videoUrl ? `<div class="media-bar">
+            ${p.virtualTourUrl ? `<button type="button" data-media="tour"><span aria-hidden="true">360°</span> Virtual tour</button>` : ''}
+            ${p.videoUrl ? `<button type="button" data-media="video"><span aria-hidden="true">▶</span> Video tour</button>` : ''}
+          </div>` : ''}
           ${photos.length > 1 ? `<div class="thumbs">${photos.map((ph, i) => `<button type="button" data-photo="${i}" aria-current="${i === photo}" aria-label="${esc(ph.caption || `Photo ${i + 1}`)}"><img src="${esc(ph.url)}" alt=""></button>`).join('')}</div>` : ''}
           <div class="layout">
             <article>
@@ -101,6 +105,10 @@
       }
 
       function wire() {
+        page.querySelectorAll('[data-media]').forEach((b) => b.addEventListener('click', () => {
+          const tour = b.dataset.media === 'tour';
+          openMedia(tour ? current.virtualTourUrl : current.videoUrl, `${tour ? 'Virtual tour' : 'Video tour'} · ${current.title}`);
+        }));
         page.querySelectorAll('[data-photo]').forEach((b) => b.addEventListener('click', () => { photo = Number(b.dataset.photo); render(); }));
         page.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', async () => {
           mode = b.dataset.mode; chosenSlot = null; render();
@@ -135,7 +143,7 @@
       async function load(first) {
         try {
           const data = await api(`/${encodeURIComponent(reference)}`);
-          const changed = !current || JSON.stringify([current.status, current.price, current.title, current.photos?.length]) !== JSON.stringify([data.property.status, data.property.price, data.property.title, data.property.photos?.length]);
+          const changed = !current || JSON.stringify([current.status, current.price, current.title, current.photos?.length, current.virtualTourUrl, current.videoUrl]) !== JSON.stringify([data.property.status, data.property.price, data.property.title, data.property.photos?.length, data.property.virtualTourUrl, data.property.videoUrl]);
           current = data.property;
           // Re-render on a change, but never while someone is typing in the form.
           const typing = document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
