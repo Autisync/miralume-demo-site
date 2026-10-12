@@ -143,6 +143,8 @@
 
       load(true);
       setInterval(() => { if (!document.hidden) load(false); }, Math.max(5, CFG.refreshSeconds) * 1000);
+      // Browsers pause a tab that is not on screen; catch up the moment it is.
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
     })();
   </script>
 </body>
