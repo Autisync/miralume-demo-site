@@ -2,6 +2,17 @@
 // page every page has. Everything shown comes from the CRM, live.
 
 const CFG = window.SITE_CONFIG || { api: 'https://api.autisync.com/api', key: '', refreshSeconds: 10 };
+
+// Visitors in the CRM: which pages people open, how far they read, what
+// they click, and enquiries and viewings booked. No cookies.
+if (CFG.trackKey) {
+  const t = document.createElement('script');
+  t.src = `${CFG.app || 'https://app.autisync.com'}/t.js`;
+  t.defer = true;
+  t.setAttribute('data-site', CFG.trackKey);
+  t.setAttribute('data-api', CFG.api);
+  document.head.appendChild(t);
+}
 const STATUS_TEXT = { available: '', viewing: '', under_offer: 'Under offer', reserved: 'Reserved', sold: 'Sold', let: 'Let agreed' };
 const CLOSED = new Set(['sold', 'let']);
 

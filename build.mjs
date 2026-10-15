@@ -15,6 +15,9 @@ const config = {
   api: (process.env.CRM_API_URL || 'https://api.autisync.com/api').replace(/\/$/, ''),
   key: process.env.LISTINGS_KEY || '',
   refreshSeconds: Number(process.env.REFRESH_SECONDS || 10),
+  // Visitors in the CRM (Visitors > Tracking). Public: it sits in the page.
+  trackKey: process.env.TRACK_KEY ?? 'as_423597735dc821ba120f122c',
+  app: (process.env.CRM_APP_URL || 'https://app.autisync.com').replace(/\/$/, ''),
 };
 writeFileSync('dist/config.js', `window.SITE_CONFIG = ${JSON.stringify(config)};\n`);
 console.log(`Built for ${config.api}${config.key ? '' : ' (LISTINGS_KEY is not set: the site will say so)'}`);
